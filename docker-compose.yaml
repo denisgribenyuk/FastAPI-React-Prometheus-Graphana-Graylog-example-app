@@ -1,0 +1,110 @@
+version: "3.3"
+
+services:
+  web:
+    build: ./src
+    command: uvicorn app.main:app --reload --workers 1 --host 0.0.0.0 --port ${APP_PORT}
+    volumes:
+      - ./src/:/usr/src/app/
+    ports:
+      - "8000:${APP_PORT}"
+    environment:
+      - DATABASE_USER=${DATABASE_USER}
+      - DATABASE_PASSWORD=${DATABASE_PASSWORD}
+      - DATABASE_NAME=${DATABASE_NAME}
+      - DATABASE_HOST=${DATABASE_HOST}
+      - DATABASE_PORT=${DATABASE_PORT}
+      - APP_PORT=${APP_PORT}
+      - GRAYLOG_HOST=${GRAYLOG_HOST}
+      - GRAYLOG_PORT_UDP=${GRAYLOG_PORT_UDP}
+    depends_on:
+      db:
+        condition: service_started
+      graylog:
+        condition: service_healthy
+  db:
+    image: postgres:13.1-alpine
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=${DATABASE_USER}
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=${DATABASE_NAME}
+    ports:
+      - "5432:${DATABASE_PORT}"
+  frontend:
+    build: ./frontend
+    environment:
+      - APP_HOST=${APP_HOST}
+      - APP_PORT=${APP_PORT}
+    ports:
+      - '8081:80'
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+
+  mongo:
+    image: mongo:3
+    volumes:
+      - mongodb_data:/data/db
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch-oss:6.8.10
+    environment:
+      - http.host=0.0.0.0
+      - transport.host=localhost
+      - network.host=0.0.0.0
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
+  graylog:
+    image: graylog/graylog:3.3
+    environment:
+      - GRAYLOG_PASSWORD_SECRET=${GRAYLOG_PASSWORD}
+      - GRAYLOG_ROOT_PASSWORD_SHA2=${GRAYLOG_PASSWORD_SHA}
+      - GRAYLOG_HTTP_EXTERNAL_URI=http://127.0.0.1:9000/
+    depends_on:
+      - mongo
+      - elasticsearch
+    ports:
+      # Graylog web interface and REST API
+      - 9000:9000
+      # Syslog TCP
+      - 1514:1514
+      # Syslog UDP
+      - 1514:1514/udp
+      # GELF TCP
+      - 12201:12201
+      # GELF UDP
+      - 12201:12201/udp
+volumes:
+  postgres_data:
+  mongodb_data:
+  vue-client:
+  grafana_data:
+
+networks:
+  default:
