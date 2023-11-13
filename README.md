@@ -28,7 +28,7 @@ This repository contains code for asynchronous example api using the [Fast Api f
 
    `docker-compose up -d --build`
 
-5. If everything completes frontend page with notes list should be available on [frontend](http://localhost:8001)
+5. If everything completes frontend page with notes list should be available on [frontend](http://localhost:8081)
 
 6. Swagger are generated on [Swagger](http://localhost:8000/docs)
 
